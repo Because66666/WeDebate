@@ -204,25 +204,18 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
           </button>
 
           {/* Enable/Disable toggle (Apple-style switch) */}
-          <button
-            onClick={() => toggleAgent(agent.id)}
-            aria-label={agent.enabled ? '禁用智能体' : '启用智能体'}
-            className="relative h-6 w-10 shrink-0 cursor-pointer outline-none transition-all duration-150 rounded-full"
-            style={{
-              backgroundColor: agent.enabled ? 'var(--success)' : 'var(--border)',
-              border: '0.5px solid transparent',
-            }}
+          <label
+            className="agent-toggle shrink-0"
             title={agent.enabled ? '禁用' : '启用'}
           >
-            <span
-              className="absolute top-0.5 h-[18px] w-[18px] rounded-full transition-transform duration-200"
-              style={{
-                backgroundColor: '#ffffff',
-                transform: agent.enabled ? 'translateX(18px)' : 'translateX(2px)',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-              }}
+            <input
+              type="checkbox"
+              checked={agent.enabled}
+              onChange={() => toggleAgent(agent.id)}
+              aria-label={agent.enabled ? '禁用智能体' : '启用智能体'}
             />
-          </button>
+            <span className="slider" />
+          </label>
 
           {/* Delete */}
           <button
@@ -283,15 +276,15 @@ export function AgentPanel() {
     addAgent(newAgent);
   };
 
-  if (!agentPanelOpen) return null;
-
   const displayAgents = agents.filter((a) => a.id !== SCRIBE_AGENT_ID);
 
   return (
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 z-40 transition-opacity duration-200"
+        className={`fixed inset-0 z-40 transition-opacity duration-[800ms] ease-in-out ${
+          agentPanelOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
         style={{ backgroundColor: 'rgba(0,0,0,0.32)' }}
         onClick={handleClose}
         aria-hidden="true"
@@ -299,7 +292,9 @@ export function AgentPanel() {
 
       {/* Panel */}
       <div
-        className="fixed right-0 top-0 z-50 flex h-full w-96 max-w-full flex-col"
+        className={`fixed right-0 top-0 z-50 flex h-full w-96 max-w-full flex-col transition-transform duration-[800ms] ease-in-out ${
+          agentPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
         style={{
           backgroundColor: 'var(--card)',
           borderLeft: '0.5px solid var(--border)',
@@ -307,6 +302,7 @@ export function AgentPanel() {
         }}
         role="dialog"
         aria-label="智能体管理面板"
+        aria-hidden={!agentPanelOpen}
       >
         {/* Header */}
         <div

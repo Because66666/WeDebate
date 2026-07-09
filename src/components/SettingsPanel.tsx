@@ -32,13 +32,13 @@ export function SettingsPanel() {
     setSettingsPanelOpen(false);
   };
 
-  if (!settingsPanelOpen) return null;
-
   return (
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 z-40 transition-opacity duration-200"
+        className={`fixed inset-0 z-40 transition-opacity duration-[800ms] ease-in-out ${
+          settingsPanelOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
         style={{ backgroundColor: 'rgba(0,0,0,0.32)' }}
         onClick={handleClose}
         aria-hidden="true"
@@ -46,7 +46,9 @@ export function SettingsPanel() {
 
       {/* Panel */}
       <div
-        className="fixed right-0 top-0 z-50 flex h-full w-96 max-w-full flex-col"
+        className={`fixed right-0 top-0 z-50 flex h-full w-96 max-w-full flex-col transition-transform duration-[800ms] ease-in-out ${
+          settingsPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
         style={{
           backgroundColor: 'var(--card)',
           borderLeft: '0.5px solid var(--border)',
@@ -54,6 +56,7 @@ export function SettingsPanel() {
         }}
         role="dialog"
         aria-label="设置面板"
+        aria-hidden={!settingsPanelOpen}
       >
         {/* Header */}
         <div

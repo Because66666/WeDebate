@@ -35,7 +35,8 @@ export class ChatService {
     onAgentReasoningComplete?: (messageId: string) => void,
     onAgentToolCallStart?: (messageId: string, toolCall: ToolCallInfo) => void,
     onAgentToolCallResult?: (messageId: string, toolCallId: string, result: string) => void,
-  ): Promise<void> {
+    onAgentSpeechComplete?: (agentId: string, agentName: string, content: string) => void,
+  ): Promise<string | null> {
     // 1. If this is the first message (no existing agent messages), initTurn
     const hasAgentMessages = existingMessages.some((m) => m.role === 'agent');
     if (!hasAgentMessages) {
@@ -202,6 +203,9 @@ export class ChatService {
       };
       existingMessages = [...existingMessages, agentMessage];
 
+      // 触发书记官总结（非阻塞，由调用方决定如何处理）
+      onAgentSpeechComplete?.(agent.id, agent.name, fullContent);
+
       // Advance turn
       turnManager.advance();
     }
@@ -213,8 +217,8 @@ export class ChatService {
     // 日志：将当前轮次的数据写入磁盘
     logService.flush();
 
-    // Return first agent content for title generation
-    return;
+    // 返回第一个发言顾问的正文内容，供标题生成使用
+    return firstAgentContent;
   }
 
   abort(): void {

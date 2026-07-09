@@ -80,3 +80,14 @@ export interface TurnState {
   interruptedAgentId: string | null;
   agentOrder: string[]; // 智能体发言顺序
 }
+
+// 书记官总结记录（绑定会话 ID）
+export interface ScribeSummary {
+  id: string;
+  conversationId: string;
+  agentId: string;
+  agentName: string;
+  agentColor: string;
+  summary: string;
+  timestamp: number;
+}

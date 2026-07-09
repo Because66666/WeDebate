@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Conversation, Message, ApiConfig } from '../types';
 import { storageService } from '../services/storage';
 import { generateTitle } from '../services/scribe-service';
+import { useScribeStore } from './scribe';
 
 interface ConversationState {
   conversations: Conversation[];
@@ -58,6 +59,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   deleteConversation: (id: string) => {
+    storageService.deleteScribeSummaries(id);
     set((state) => {
       const conversations = state.conversations.filter((c) => c.id !== id);
       const currentConversationId =
@@ -68,11 +70,13 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     });
     get().saveConversations();
     storageService.setCurrentConversationId(get().currentConversationId);
+    useScribeStore.getState().setCurrentConversation(get().currentConversationId);
   },
 
   switchConversation: (id: string) => {
     set({ currentConversationId: id });
     storageService.setCurrentConversationId(id);
+    useScribeStore.getState().setCurrentConversation(id);
   },
 
   addMessage: (message: Message) => {
@@ -156,16 +160,30 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   generateAndSetTitle: async (apiConfig: ApiConfig, userMessage: string, agentResponse: string) => {
     const { currentConversationId } = get();
-    if (!currentConversationId) return;
+    if (!currentConversationId) {
+      console.warn('[TitleGen] 无当前对话，跳过标题生成');
+      return;
+    }
     const conv = get().conversations.find((c) => c.id === currentConversationId);
-    if (!conv || conv.title !== '新对话') return;
+    if (!conv) {
+      console.warn('[TitleGen] 未找到对话');
+      return;
+    }
+    if (conv.title !== '新对话') {
+      console.log('[TitleGen] 标题已存在，跳过:', conv.title);
+      return;
+    }
     try {
+      console.log('[TitleGen] 开始生成标题...');
       const title = await generateTitle(apiConfig, userMessage, agentResponse);
       if (title) {
         get().updateConversationTitle(currentConversationId, title);
+        console.log('[TitleGen] 标题已更新:', title);
+      } else {
+        console.warn('[TitleGen] 生成的标题为空');
       }
     } catch (err) {
-      console.error('Failed to generate title:', err);
+      console.error('[TitleGen] 标题生成失败:', err);
     }
   },
 

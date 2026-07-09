@@ -233,7 +233,7 @@ export default function MessageItem({ message, agent, showSeparator }: MessageIt
   const agentColor = agent?.color ?? 'var(--primary)';
 
   return (
-    <div className="px-4 py-2" role="article" aria-label={`${agent?.name ?? '智能体'}的消息`}>
+    <div className="px-4 py-2" role="article" aria-label={`${agent?.name ?? '智能体'}的消息`} data-agent-id={agent?.id}>
       {showSeparator && (
         <div
           className="mb-3"

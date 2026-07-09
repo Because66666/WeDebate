@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ApiConfig } from '../types';
 import { storageService } from '../services/storage';
+import { useScribeStore } from './scribe';
 
 interface SettingsState {
   apiConfig: ApiConfig | null;
@@ -18,7 +19,7 @@ interface SettingsState {
   setAgentPanelOpen: (open: boolean) => void;
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   apiConfig: null,
   theme: 'light',
   sidebarOpen: false,
@@ -43,7 +44,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   toggleSidebar: () => {
-    set((state) => ({ sidebarOpen: !state.sidebarOpen }));
+    const next = !get().sidebarOpen;
+    if (next) useScribeStore.getState().closePanel();
+    set({ sidebarOpen: next });
   },
 
   setSettingsPanelOpen: (open: boolean) => {

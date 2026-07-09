@@ -28,20 +28,20 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile overlay backdrop */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 md:hidden"
-          style={{ backgroundColor: 'rgba(0,0,0,0.32)' }}
-          onClick={toggleSidebar}
-          aria-hidden="true"
-        />
-      )}
+      <div
+        className={`fixed inset-0 z-30 transition-opacity duration-[800ms] ease-in-out md:hidden ${
+          sidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        style={{ backgroundColor: 'rgba(0,0,0,0.32)' }}
+        onClick={toggleSidebar}
+        aria-hidden="true"
+      />
 
       <aside
         className={`${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        } fixed inset-y-0 left-0 z-40 flex w-64 flex-col transition-transform duration-200 ease-in-out md:static md:z-auto md:w-64 md:transition-none ${
-          !sidebarOpen ? 'md:hidden' : ''
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } fixed inset-y-0 left-0 z-40 flex w-64 flex-col transition-transform duration-[800ms] ease-in-out md:static md:z-auto md:translate-x-0 md:transition-[width] md:duration-[800ms] md:ease-in-out ${
+          sidebarOpen ? 'md:w-64' : 'md:w-0 md:overflow-hidden'
         }`}
         style={{
           backgroundColor: 'var(--sidebar-bg)',

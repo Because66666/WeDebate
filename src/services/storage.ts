@@ -1,4 +1,4 @@
-import type { ApiConfig, Conversation, AgentConfig } from '../types';
+import type { ApiConfig, Conversation, AgentConfig, ScribeSummary } from '../types';
 
 const STORAGE_KEYS = {
   API_CONFIG: 'debate-room-api-config',
@@ -7,6 +7,9 @@ const STORAGE_KEYS = {
   AGENTS: 'debate-room-agents',
   THEME: 'debate-room-theme',
 };
+
+const scribeSummariesKey = (conversationId: string) =>
+  `debate-room-scribe-summaries-${conversationId}`;
 
 export const storageService = {
   // API Config
@@ -100,6 +103,35 @@ export const storageService = {
   setTheme: (theme: 'light' | 'dark'): void => {
     try {
       localStorage.setItem(STORAGE_KEYS.THEME, theme);
+    } catch {
+      // silently fail
+    }
+  },
+
+  // Scribe Summaries (per conversation)
+  getScribeSummaries: (conversationId: string): ScribeSummary[] => {
+    try {
+      const raw = localStorage.getItem(scribeSummariesKey(conversationId));
+      return raw ? (JSON.parse(raw) as ScribeSummary[]) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  setScribeSummaries: (conversationId: string, summaries: ScribeSummary[]): void => {
+    try {
+      localStorage.setItem(
+        scribeSummariesKey(conversationId),
+        JSON.stringify(summaries)
+      );
+    } catch {
+      // silently fail
+    }
+  },
+
+  deleteScribeSummaries: (conversationId: string): void => {
+    try {
+      localStorage.removeItem(scribeSummariesKey(conversationId));
     } catch {
       // silently fail
     }

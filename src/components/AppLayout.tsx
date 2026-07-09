@@ -1,10 +1,12 @@
-import { Menu, Users, Settings, Sun, Moon } from 'lucide-react';
+import { Menu, Users, Settings, Sun, Moon, ClipboardList } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { SettingsPanel } from './SettingsPanel';
 import { AgentPanel } from './AgentPanel';
+import { ScribePanel } from './ScribePanel';
 import ChatArea from './ChatArea';
 import InputBox from './InputBox';
 import { useSettingsStore } from '../stores/settings';
+import { useScribeStore, selectCurrentSummaries } from '../stores/scribe';
 import { useConversationStore } from '../stores/conversation';
 
 export function AppLayout() {
@@ -15,6 +17,12 @@ export function AppLayout() {
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const getCurrentConversation = useConversationStore((s) => s.getCurrentConversation);
+
+  const scribeHasShownOnce = useScribeStore((s) => s.hasShownOnce);
+  const scribeIsSummarizing = useScribeStore((s) => s.isSummarizing);
+  const scribeSummaries = useScribeStore(selectCurrentSummaries);
+  const openScribePanel = useScribeStore((s) => s.openPanel);
+  const showScribeButton = scribeHasShownOnce || scribeIsSummarizing || scribeSummaries.length > 0;
 
   const currentConversation = getCurrentConversation();
   const title = currentConversation?.title ?? '新对话';
@@ -33,7 +41,6 @@ export function AppLayout() {
         className="flex h-12 shrink-0 items-center gap-3 px-4"
         style={{
           backgroundColor: 'var(--background)',
-          borderBottom: '0.5px solid var(--border)',
         }}
       >
         {/* Left: sidebar toggle */}
@@ -43,7 +50,9 @@ export function AppLayout() {
           className="flex h-7 w-7 cursor-pointer items-center justify-center outline-none transition-all duration-200"
           style={{
             color: 'var(--icon-muted)',
-            borderRadius: 'var(--radius-sm)',
+            borderRadius: '80%',
+            border: '0.5px solid var(--border)',
+            backgroundColor: 'transparent',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -56,7 +65,7 @@ export function AppLayout() {
         <h1
           className="flex-1 truncate text-center font-semibold"
           style={{
-            fontSize: '13px',
+            fontSize: '16px',
             letterSpacing: '-0.01em',
             color: 'var(--foreground)',
           }}
@@ -65,7 +74,14 @@ export function AppLayout() {
         </h1>
 
         {/* Right: theme toggle + agent panel + settings */}
-        <div className="flex items-center gap-1.5">
+        <div
+          className="flex items-center gap-1.5 px-1.5 py-1"
+          style={{
+            borderRadius: 'var(--radius-lg)',
+            border: '0.5px solid var(--border)',
+            backgroundColor: 'transparent',
+          }}
+        >
           <button
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
@@ -80,6 +96,22 @@ export function AppLayout() {
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
+          {showScribeButton && (
+            <button
+              onClick={openScribePanel}
+              aria-label="书记官面板"
+              className="flex h-7 w-7 cursor-pointer items-center justify-center outline-none transition-all duration-200"
+              style={{
+                color: 'var(--icon-muted)',
+                borderRadius: 'var(--radius-sm)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              title="书记官面板"
+            >
+              <ClipboardList size={16} />
+            </button>
+          )}
           <button
             onClick={() => setAgentPanelOpen(true)}
             aria-label="智能体面板"
@@ -111,13 +143,14 @@ export function AppLayout() {
         </div>
       </header>
 
-      {/* Body: Sidebar + Main Content */}
+      {/* Body: Sidebar + Main Content + Scribe Panel */}
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="flex flex-1 flex-col overflow-hidden">
           <ChatArea />
           <InputBox />
         </main>
+        <ScribePanel />
       </div>
 
       {/* Overlay panels */}

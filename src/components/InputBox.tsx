@@ -4,8 +4,10 @@ import { useConversationStore } from '../stores/conversation';
 import { useAgentStore } from '../stores/agent';
 import { useSettingsStore } from '../stores/settings';
 import { useTurnStore } from '../stores/turn';
+import { useScribeStore } from '../stores/scribe';
 import { chatService } from '../services/chat-service';
 import { logService } from '../services/log-service';
+import { summarizeAgentSpeech } from '../services/scribe-service';
 import type { Message, ApiConfig, ToolCallInfo, ThinkingBlockItem } from '../types';
 
 export default function InputBox() {
@@ -143,10 +145,7 @@ export default function InputBox() {
 
     const currentMessages = convStore.getCurrentConversation()?.messages ?? [];
 
-    // Track first agent response for title generation
-    let firstAgentResponse: string | null = null;
-
-    await chatService.sendMessage(
+    const firstAgentContent = await chatService.sendMessage(
       userMessage,
       enabledAgents,
       apiConfig,
@@ -184,10 +183,6 @@ export default function InputBox() {
         // 消息完成时强制标记 reasoningComplete，确保错误/无 reasoning/工具调用后正文可见
         useConversationStore.getState().patchMessage(messageId, { reasoningComplete: true });
         convStore.updateMessage(messageId, fullContent, false);
-
-        if (firstAgentResponse === null && fullContent) {
-          firstAgentResponse = fullContent;
-        }
 
         // 清理该消息的 reasoning 跟踪状态
         hasReasoningRef.current.delete(messageId);
@@ -235,11 +230,39 @@ export default function InputBox() {
           ),
         });
       },
+      // onAgentSpeechComplete（新增：触发书记官总结）
+      (agentId, agentName, content) => {
+        if (!content) return;
+        const conversationId = useConversationStore.getState().currentConversationId;
+        if (!conversationId) return;
+        useScribeStore.getState().setSummarizing(true);
+
+        // 非阻塞启动书记官总结，与下一位顾问并行
+        summarizeAgentSpeech(apiConfig as ApiConfig, agentName, content)
+          .then((summary) => {
+            const agent = agentStore.agents.find((a) => a.id === agentId);
+            const scribeStore = useScribeStore.getState();
+            scribeStore.addSummary({
+              id: crypto.randomUUID(),
+              conversationId,
+              agentId,
+              agentName,
+              agentColor: agent?.color ?? '#888',
+              summary,
+              timestamp: Date.now(),
+            });
+            scribeStore.setSummarizing(false);
+          })
+          .catch((err) => {
+            console.error('[Scribe] 总结失败:', err);
+            useScribeStore.getState().setSummarizing(false);
+          });
+      },
     );
 
-    // Generate title using scribe service after first agent completes
-    if (firstAgentResponse) {
-      convStore.generateAndSetTitle(apiConfig as ApiConfig, text, firstAgentResponse);
+    // 使用第一个发言顾问的正文内容生成标题
+    if (firstAgentContent) {
+      await convStore.generateAndSetTitle(apiConfig as ApiConfig, text, firstAgentContent);
     }
   }, [input, enqueueToken, flushTokens]);
 
