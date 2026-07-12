@@ -1,4 +1,4 @@
-import type { ApiConfig } from '../types';
+import type { ApiConfig, ChatUsage } from '../types';
 import { SCRIBE_PROMPT, SCRIBE_SUMMARY_PROMPT } from '../prompts/agents/scribe';
 
 export async function generateTitle(
@@ -48,7 +48,7 @@ export async function summarizeAgentSpeech(
   apiConfig: ApiConfig,
   agentName: string,
   agentContent: string,
-): Promise<string> {
+): Promise<{ summary: string; usage?: ChatUsage }> {
   const { apiKey, endpoint, model } = apiConfig;
   const baseUrl = endpoint.replace(/\/+$/, '');
   const url = `${baseUrl}/chat/completions`;
@@ -84,5 +84,13 @@ export async function summarizeAgentSpeech(
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content ?? '';
-  return content.trim();
+  const rawUsage = data.usage;
+  const usage: ChatUsage | undefined = rawUsage
+    ? {
+        prompt_tokens: rawUsage.prompt_tokens ?? 0,
+        completion_tokens: rawUsage.completion_tokens ?? 0,
+        total_tokens: rawUsage.total_tokens ?? 0,
+      }
+    : undefined;
+  return { summary: content.trim(), usage };
 }

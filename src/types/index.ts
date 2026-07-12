@@ -81,6 +81,13 @@ export interface TurnState {
   agentOrder: string[]; // 智能体发言顺序
 }
 
+// OpenAI 兼容 API 的 token 用量
+export interface ChatUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 // 书记官总结记录（绑定会话 ID）
 export interface ScribeSummary {
   id: string;
@@ -90,4 +97,9 @@ export interface ScribeSummary {
   agentColor: string;
   summary: string;
   timestamp: number;
+  // 统计项扩展字段（可选，向后兼容旧 localStorage 数据）
+  // 缺省（undefined）视为普通顾问摘要项
+  kind?: 'stats';
+  inputTokens?: number;
+  outputTokens?: number;
 }

@@ -1,4 +1,4 @@
-import type { ApiConfig } from '../types';
+import type { ApiConfig, ChatUsage } from '../types';
 
 interface StreamCallbacks {
   onToken: (token: string) => void;
@@ -9,6 +9,8 @@ interface StreamCallbacks {
   // 日志记录钩子
   onToolCallStart?: (id: string, name: string, args: Record<string, unknown>) => void;
   onToolCallResult?: (id: string, name: string, result: string) => void;
+  // 流式响应末尾的 token 用量（需 stream_options.include_usage = true）
+  onUsage?: (usage: ChatUsage) => void;
 }
 
 /** 流式响应中累积的 tool_call 片段 */
@@ -55,6 +57,7 @@ export async function streamChatCompletion(
     model: apiConfig.model,
     messages,
     stream: true,
+    stream_options: { include_usage: true },
   };
 
   if (tools && tools.length > 0) {
@@ -91,12 +94,15 @@ export async function streamChatCompletion(
   }
 
   // 读取流式响应
-  const { fullContent, toolCalls, rawDsmlBlocks } = await readStream(
+  const { fullContent, toolCalls, rawDsmlBlocks, usage } = await readStream(
     response,
     callbacks,
   );
 
   // 注意: reasoningContent 已通过 onReasoningToken 回调逐 token 传递
+
+  // 流末尾的 usage 在这里向上冒泡（递归每一轮的 usage 都会触发）
+  if (usage) callbacks.onUsage?.(usage);
 
   // 如果没有 tool_calls，直接返回累积的内容
   if (toolCalls.length === 0) {
@@ -186,6 +192,7 @@ interface ReadStreamResult {
   toolCalls: ToolCallDelta[];
   reasoningContent: string;
   rawDsmlBlocks: string[];
+  usage?: ChatUsage;
 }
 
 /**
@@ -201,6 +208,7 @@ async function readStream(
   response: Response,
   callbacks: StreamCallbacks,
 ): Promise<ReadStreamResult> {
+  let usage: ChatUsage | undefined;
   const body = response.body;
   if (!body) {
     return {
@@ -208,6 +216,7 @@ async function readStream(
       toolCalls: [],
       reasoningContent: '',
       rawDsmlBlocks: [],
+      usage,
     };
   }
 
@@ -338,6 +347,14 @@ async function readStream(
 
     try {
       const parsed = JSON.parse(jsonStr);
+      // 捕获流末尾的 usage（此时 choices 可能为空数组）
+      if (parsed.usage) {
+        usage = {
+          prompt_tokens: parsed.usage.prompt_tokens ?? 0,
+          completion_tokens: parsed.usage.completion_tokens ?? 0,
+          total_tokens: parsed.usage.total_tokens ?? 0,
+        };
+      }
       const choice = parsed.choices?.[0];
       if (!choice) return true;
 
@@ -401,6 +418,7 @@ async function readStream(
       toolCalls: collectToolCalls(toolCallMap),
       reasoningContent,
       rawDsmlBlocks,
+      usage,
     };
   }
 

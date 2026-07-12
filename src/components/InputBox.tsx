@@ -231,15 +231,25 @@ export default function InputBox() {
         });
       },
       // onAgentSpeechComplete（新增：触发书记官总结）
-      (agentId, agentName, content) => {
+      (agentId, agentName, content, usage) => {
         if (!content) return;
         const conversationId = useConversationStore.getState().currentConversationId;
         if (!conversationId) return;
+
+        // 触发点 1：顾问发言完毕，立即累计该次发言的 token（创建/更新统计项）
+        if (usage && (usage.prompt_tokens > 0 || usage.completion_tokens > 0)) {
+          useScribeStore.getState().addTokens(
+            conversationId,
+            usage.prompt_tokens,
+            usage.completion_tokens,
+          );
+        }
+
         useScribeStore.getState().setSummarizing(true);
 
         // 非阻塞启动书记官总结，与下一位顾问并行
         summarizeAgentSpeech(apiConfig as ApiConfig, agentName, content)
-          .then((summary) => {
+          .then(({ summary, usage: scribeUsage }) => {
             const agent = agentStore.agents.find((a) => a.id === agentId);
             const scribeStore = useScribeStore.getState();
             scribeStore.addSummary({
@@ -251,6 +261,17 @@ export default function InputBox() {
               summary,
               timestamp: Date.now(),
             });
+            // 触发点 2：书记官总结完成，累计该次总结调用的 token
+            if (
+              scribeUsage &&
+              (scribeUsage.prompt_tokens > 0 || scribeUsage.completion_tokens > 0)
+            ) {
+              scribeStore.addTokens(
+                conversationId,
+                scribeUsage.prompt_tokens,
+                scribeUsage.completion_tokens,
+              );
+            }
             scribeStore.setSummarizing(false);
           })
           .catch((err) => {

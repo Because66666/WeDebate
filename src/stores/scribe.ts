@@ -12,6 +12,7 @@ interface ScribeState {
 
   setCurrentConversation: (id: string | null) => void;
   addSummary: (summary: ScribeSummary) => void;
+  addTokens: (conversationId: string, inputTokens: number, outputTokens: number) => void;
   setSummarizing: (v: boolean) => void;
   openPanel: () => void;
   closePanel: () => void;
@@ -42,10 +43,17 @@ export const useScribeStore = create<ScribeState>((set, get) => ({
     const { conversationId } = summary;
     set((state) => {
       const existing = state.summariesByConversation[conversationId] ?? [];
+      // 分离统计项与普通摘要项，保证新摘要插入到统计项之前
+      const statsEntries = existing.filter((s) => s.kind === 'stats');
+      const normalEntries = existing.filter((s) => s.kind !== 'stats');
+      const statsEntry = statsEntries[0]; // 至多一个
+      const newEntries = statsEntry
+        ? [...normalEntries, summary, statsEntry]
+        : [...normalEntries, summary];
       return {
         summariesByConversation: {
           ...state.summariesByConversation,
-          [conversationId]: [...existing, summary],
+          [conversationId]: newEntries,
         },
       };
     });
@@ -53,6 +61,43 @@ export const useScribeStore = create<ScribeState>((set, get) => ({
     if (!get().hasShownOnce) {
       get().openPanel();
     }
+  },
+
+  addTokens: (conversationId, inputTokens, outputTokens) => {
+    set((state) => {
+      const existing = state.summariesByConversation[conversationId] ?? [];
+      const statsEntries = existing.filter((s) => s.kind === 'stats');
+      const normalEntries = existing.filter((s) => s.kind !== 'stats');
+      let statsEntry = statsEntries[0];
+      if (!statsEntry) {
+        // 首次累计时创建统计项
+        statsEntry = {
+          id: crypto.randomUUID(),
+          conversationId,
+          agentId: 'scribe-stats',
+          agentName: 'Token 统计',
+          agentColor: '#888',
+          summary: '',
+          timestamp: Date.now(),
+          kind: 'stats',
+          inputTokens: 0,
+          outputTokens: 0,
+        };
+      }
+      const updatedStats: ScribeSummary = {
+        ...statsEntry,
+        inputTokens: (statsEntry.inputTokens ?? 0) + inputTokens,
+        outputTokens: (statsEntry.outputTokens ?? 0) + outputTokens,
+        timestamp: Date.now(),
+      };
+      return {
+        summariesByConversation: {
+          ...state.summariesByConversation,
+          [conversationId]: [...normalEntries, updatedStats],
+        },
+      };
+    });
+    get().persistSummaries(conversationId);
   },
 
   setSummarizing: (v) => set({ isSummarizing: v }),

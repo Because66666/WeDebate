@@ -1,4 +1,4 @@
-import { X, ClipboardList, Loader2 } from 'lucide-react';
+import { X, ClipboardList, Loader2, BarChart3 } from 'lucide-react';
 import { useScribeStore, selectCurrentSummaries } from '../stores/scribe';
 import MarkdownRenderer from './MarkdownRenderer';
 
@@ -86,48 +86,105 @@ export function ScribePanel() {
           </p>
         ) : (
           <div className="flex flex-col gap-4">
-            {summaries.map((item) => (
-              <div
-                key={item.id}
-                className="overflow-hidden cursor-pointer"
-                style={{
-                  borderRadius: 'var(--radius-md)',
-                  border: '0.5px solid var(--border)',
-                  backgroundColor: 'var(--background-secondary)',
-                }}
-                onClick={() => scrollToAgentFirstMessage(item.agentId)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    scrollToAgentFirstMessage(item.agentId);
-                  }
-                }}
-              >
-                <div
-                  className="flex items-center gap-2 px-3 py-2"
-                  style={{ borderBottom: '0.5px solid var(--border)' }}
-                >
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: item.agentColor }}
-                    aria-hidden="true"
-                  />
-                  <span
-                    className="font-semibold"
-                    style={{ fontSize: '12px', color: 'var(--foreground)' }}
+            {summaries.map((item) => {
+              if (item.kind === 'stats') {
+                // Token 统计面板：样式与顾问摘要卡片一致
+                return (
+                  <div
+                    key={item.id}
+                    className="overflow-hidden"
+                    style={{
+                      borderRadius: 'var(--radius-md)',
+                      border: '0.5px solid var(--border)',
+                      backgroundColor: 'var(--background-secondary)',
+                    }}
                   >
-                    {item.agentName}
-                  </span>
-                </div>
-                <div className="px-3 py-2.5">
-                  <div className="markdown-body" style={{ fontSize: '13px' }}>
-                    <MarkdownRenderer content={item.summary} />
+                    <div
+                      className="flex items-center gap-2 px-3 py-2"
+                      style={{ borderBottom: '0.5px solid var(--border)' }}
+                    >
+                      <BarChart3
+                        size={12}
+                        style={{ color: 'var(--icon-muted)' }}
+                        aria-hidden="true"
+                      />
+                      <span
+                        className="font-semibold"
+                        style={{ fontSize: '12px', color: 'var(--foreground)' }}
+                      >
+                        {item.agentName}
+                      </span>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <div
+                        className="flex flex-col gap-1"
+                        style={{ fontSize: '13px', color: 'var(--foreground)' }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span style={{ color: 'var(--foreground-secondary)' }}>
+                            输入 Token
+                          </span>
+                          <span className="font-semibold tabular-nums">
+                            {(item.inputTokens ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span style={{ color: 'var(--foreground-secondary)' }}>
+                            输出 Token
+                          </span>
+                          <span className="font-semibold tabular-nums">
+                            {(item.outputTokens ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              // 普通顾问摘要项
+              return (
+                <div
+                  key={item.id}
+                  className="overflow-hidden cursor-pointer"
+                  style={{
+                    borderRadius: 'var(--radius-md)',
+                    border: '0.5px solid var(--border)',
+                    backgroundColor: 'var(--background-secondary)',
+                  }}
+                  onClick={() => scrollToAgentFirstMessage(item.agentId)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      scrollToAgentFirstMessage(item.agentId);
+                    }
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-2 px-3 py-2"
+                    style={{ borderBottom: '0.5px solid var(--border)' }}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.agentColor }}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className="font-semibold"
+                      style={{ fontSize: '12px', color: 'var(--foreground)' }}
+                    >
+                      {item.agentName}
+                    </span>
+                  </div>
+                  <div className="px-3 py-2.5">
+                    <div className="markdown-body" style={{ fontSize: '13px' }}>
+                      <MarkdownRenderer content={item.summary} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {isSummarizing && (
               <div
                 className="flex items-center gap-2 px-3 py-2.5"

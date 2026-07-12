@@ -1,4 +1,4 @@
-import type { AgentConfig, ApiConfig, Message, ToolCallInfo } from '../types';
+import type { AgentConfig, ApiConfig, Message, ToolCallInfo, ChatUsage } from '../types';
 import { streamChatCompletion } from './openai';
 import { buildAgentContext } from './context-builder';
 import { createToolRegistry } from './tools';
@@ -35,7 +35,12 @@ export class ChatService {
     onAgentReasoningComplete?: (messageId: string) => void,
     onAgentToolCallStart?: (messageId: string, toolCall: ToolCallInfo) => void,
     onAgentToolCallResult?: (messageId: string, toolCallId: string, result: string) => void,
-    onAgentSpeechComplete?: (agentId: string, agentName: string, content: string) => void,
+    onAgentSpeechComplete?: (
+      agentId: string,
+      agentName: string,
+      content: string,
+      usage?: ChatUsage,
+    ) => void,
   ): Promise<string | null> {
     // 1. If this is the first message (no existing agent messages), initTurn
     const hasAgentMessages = existingMessages.some((m) => m.role === 'agent');
@@ -114,6 +119,12 @@ export class ChatService {
       // Stream the response
       let fullContent = '';
       let encounteredError: Error | null = null;
+      // 累积本次顾问发言（含工具调用多轮）的 token 用量
+      const agentUsage: ChatUsage = {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      };
       try {
         await streamChatCompletion(
           apiConfig,
@@ -151,6 +162,11 @@ export class ChatService {
             onToolCallResult: (id, name, result) => {
               logService.addToolResult(name, result);
               onAgentToolCallResult?.(messageId, id, result);
+            },
+            onUsage: (u) => {
+              agentUsage.prompt_tokens += u.prompt_tokens ?? 0;
+              agentUsage.completion_tokens += u.completion_tokens ?? 0;
+              agentUsage.total_tokens += u.total_tokens ?? 0;
             },
           },
           signal,
@@ -204,7 +220,10 @@ export class ChatService {
       existingMessages = [...existingMessages, agentMessage];
 
       // 触发书记官总结（非阻塞，由调用方决定如何处理）
-      onAgentSpeechComplete?.(agent.id, agent.name, fullContent);
+      // 若本次发言有 token 用量，一并传出供统计面板累计
+      const finalUsage: ChatUsage | undefined =
+        agentUsage.total_tokens > 0 ? agentUsage : undefined;
+      onAgentSpeechComplete?.(agent.id, agent.name, fullContent, finalUsage);
 
       // Advance turn
       turnManager.advance();

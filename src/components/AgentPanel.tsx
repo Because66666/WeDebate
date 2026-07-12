@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { X, Plus, Trash2, Pencil, Users } from 'lucide-react';
+import { X, Plus, Trash2, Pencil, Users, RotateCcw } from 'lucide-react';
 import { useSettingsStore } from '../stores/settings';
 import { useAgentStore } from '../stores/agent';
 import type { AgentConfig } from '../types';
 import { SCRIBE_AGENT_ID } from '../types';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const COLOR_PALETTE = ['#007AFF', '#34C759', '#FF9F0A', '#FF3B30', '#5E5CE6', '#FF2D55', '#64D2FF', '#30D158'];
 
@@ -259,6 +260,11 @@ export function AgentPanel() {
   const setAgentPanelOpen = useSettingsStore((s) => s.setAgentPanelOpen);
   const agents = useAgentStore((s) => s.agents);
   const addAgent = useAgentStore((s) => s.addAgent);
+  const updateAgent = useAgentStore((s) => s.updateAgent);
+  const resetToDefaults = useAgentStore((s) => s.resetToDefaults);
+
+  const [newAgentForEdit, setNewAgentForEdit] = useState<AgentConfig | null>(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   const handleClose = () => {
     setAgentPanelOpen(false);
@@ -274,6 +280,7 @@ export function AgentPanel() {
       enabled: true,
     };
     addAgent(newAgent);
+    setNewAgentForEdit(newAgent);
   };
 
   const displayAgents = agents.filter((a) => a.id !== SCRIBE_AGENT_ID);
@@ -319,6 +326,20 @@ export function AgentPanel() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setResetConfirmOpen(true)}
+              aria-label="恢复默认智能体"
+              title="恢复默认"
+              className="flex h-7 w-7 cursor-pointer items-center justify-center outline-none transition-all duration-150"
+              style={{
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--icon-muted)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <RotateCcw size={14} />
+            </button>
             <button
               onClick={handleAddAgent}
               aria-label="添加智能体"
@@ -369,6 +390,33 @@ export function AgentPanel() {
           </div>
         </div>
       </div>
+
+      {/* Persona editor for newly added agent */}
+      {newAgentForEdit && (
+        <PersonaEditorModal
+          agent={newAgentForEdit}
+          onSave={(personaPrompt) => {
+            updateAgent(newAgentForEdit.id, { personaPrompt });
+            setNewAgentForEdit(null);
+          }}
+          onCancel={() => setNewAgentForEdit(null)}
+        />
+      )}
+
+      {/* Reset to defaults confirmation */}
+      {resetConfirmOpen && (
+        <ConfirmDialog
+          title="恢复默认智能体"
+          message="此操作将清除所有自定义智能体并恢复为默认角色配置，是否继续？"
+          confirmText="恢复默认"
+          variant="danger"
+          onConfirm={() => {
+            resetToDefaults();
+            setResetConfirmOpen(false);
+          }}
+          onCancel={() => setResetConfirmOpen(false)}
+        />
+      )}
     </>
   );
 }
