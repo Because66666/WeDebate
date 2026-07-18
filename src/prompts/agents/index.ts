@@ -1,6 +1,7 @@
 import type { AgentConfig } from '../../types';
 import { FACT_CHECKER_PROMPT } from './fact-checker';
 import { LOGIC_EXPERT_PROMPT } from './logic-expert';
+import { POSITION_ANALYST_PROMPT } from './position-analyst';
 import { ETHICIST_PROMPT } from './ethicist';
 import { PSYCHOLOGIST_PROMPT } from './psychologist';
 import { STRATEGIST_PROMPT } from './strategist';
@@ -26,6 +27,12 @@ export const AGENT_PRESETS: AgentPreset[] = [
     name: '逻辑与批判性思维专家',
     color: '#8B5CF6',
     personaPrompt: LOGIC_EXPERT_PROMPT,
+  },
+  {
+    id: 'position-analyst',
+    name: '立场分析师',
+    color: '#06B6D4',
+    personaPrompt: POSITION_ANALYST_PROMPT,
   },
   {
     id: 'ethicist',
