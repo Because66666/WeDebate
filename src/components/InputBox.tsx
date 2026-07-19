@@ -245,7 +245,7 @@ export default function InputBox() {
           );
         }
 
-        useScribeStore.getState().setSummarizing(true);
+        useScribeStore.getState().incrementSummarizing();
 
         // 非阻塞启动书记官总结，与下一位顾问并行
         summarizeAgentSpeech(apiConfig as ApiConfig, agentName, content)
@@ -272,11 +272,11 @@ export default function InputBox() {
                 scribeUsage.completion_tokens,
               );
             }
-            scribeStore.setSummarizing(false);
+            scribeStore.decrementSummarizing();
           })
           .catch((err) => {
             console.error('[Scribe] 总结失败:', err);
-            useScribeStore.getState().setSummarizing(false);
+            useScribeStore.getState().decrementSummarizing();
           });
       },
     );

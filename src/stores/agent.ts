@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { AgentConfig } from '../types';
 import { SCRIBE_AGENT_ID } from '../types';
 import { storageService } from '../services/storage';
-import { createDefaultAgents } from '../prompts/agents';
+import { createDefaultAgents, AGENT_PRESETS } from '../prompts/agents';
 
 interface AgentState {
   agents: AgentConfig[];
@@ -23,8 +23,42 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   loadAgents: () => {
     const stored = storageService.getAgents();
-    const agents = stored.length > 0 ? stored : createDefaultAgents();
-    set({ agents });
+    if (stored.length === 0) {
+      set({ agents: createDefaultAgents() });
+      return;
+    }
+    // 对齐：缺失的默认 agent 补充进来，保留用户自定义与修改
+    const storedIds = new Set(stored.map((a) => a.id));
+    const missingDefaults = AGENT_PRESETS.filter((p) => !storedIds.has(p.id));
+    if (missingDefaults.length === 0) {
+      set({ agents: stored });
+      return;
+    }
+    // 按 AGENT_PRESETS 顺序重建：先保留 stored 中已有的默认 agent（按 preset 顺序），
+    // 再追加用户自定义 agent
+    const presetIds = new Set(AGENT_PRESETS.map((p) => p.id));
+    const ordered: AgentConfig[] = [];
+    for (const preset of AGENT_PRESETS) {
+      const found = stored.find((a) => a.id === preset.id);
+      if (found) {
+        ordered.push(found); // 保留用户对该默认 agent 的修改
+      } else {
+        // 缺失则用默认配置补充
+        ordered.push({
+          id: preset.id,
+          name: preset.name,
+          color: preset.color,
+          basePrompt: 'base',
+          personaPrompt: preset.personaPrompt,
+          enabled: true,
+        });
+      }
+    }
+    // 追加用户自定义 agent（id 不在 AGENT_PRESETS 中的）
+    const customAgents = stored.filter((a) => !presetIds.has(a.id));
+    const merged = [...ordered, ...customAgents];
+    set({ agents: merged });
+    storageService.setAgents(merged);
   },
 
   addAgent: (agent: AgentConfig) => {

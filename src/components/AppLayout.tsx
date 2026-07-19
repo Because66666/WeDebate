@@ -6,7 +6,7 @@ import { ScribePanel } from './ScribePanel';
 import ChatArea from './ChatArea';
 import InputBox from './InputBox';
 import { useSettingsStore } from '../stores/settings';
-import { useScribeStore, selectCurrentSummaries } from '../stores/scribe';
+import { useScribeStore, selectCurrentSummaries, selectIsSummarizing } from '../stores/scribe';
 import { useConversationStore } from '../stores/conversation';
 
 export function AppLayout() {
@@ -19,7 +19,7 @@ export function AppLayout() {
   const getCurrentConversation = useConversationStore((s) => s.getCurrentConversation);
 
   const scribeHasShownOnce = useScribeStore((s) => s.hasShownOnce);
-  const scribeIsSummarizing = useScribeStore((s) => s.isSummarizing);
+  const scribeIsSummarizing = useScribeStore(selectIsSummarizing);
   const scribeSummaries = useScribeStore(selectCurrentSummaries);
   const openScribePanel = useScribeStore((s) => s.openPanel);
   const showScribeButton = scribeHasShownOnce || scribeIsSummarizing || scribeSummaries.length > 0;

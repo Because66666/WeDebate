@@ -1,5 +1,5 @@
 import { X, ClipboardList, Loader2, BarChart3 } from 'lucide-react';
-import { useScribeStore, selectCurrentSummaries } from '../stores/scribe';
+import { useScribeStore, selectCurrentSummaries, selectIsSummarizing } from '../stores/scribe';
 import MarkdownRenderer from './MarkdownRenderer';
 
 function scrollToAgentFirstMessage(agentId: string) {
@@ -16,7 +16,7 @@ function scrollToAgentFirstMessage(agentId: string) {
 
 export function ScribePanel() {
   const panelOpen = useScribeStore((s) => s.panelOpen);
-  const isSummarizing = useScribeStore((s) => s.isSummarizing);
+  const isSummarizing = useScribeStore(selectIsSummarizing);
   const closePanel = useScribeStore((s) => s.closePanel);
   const summaries = useScribeStore(selectCurrentSummaries);
 

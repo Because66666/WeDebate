@@ -7,13 +7,14 @@ interface ScribeState {
   currentConversationId: string | null;
   summariesByConversation: Record<string, ScribeSummary[]>;
   panelOpen: boolean;
-  isSummarizing: boolean;
+  summarizingCount: number;
   hasShownOnce: boolean;
 
   setCurrentConversation: (id: string | null) => void;
   addSummary: (summary: ScribeSummary) => void;
   addTokens: (conversationId: string, inputTokens: number, outputTokens: number) => void;
-  setSummarizing: (v: boolean) => void;
+  incrementSummarizing: () => void;
+  decrementSummarizing: () => void;
   openPanel: () => void;
   closePanel: () => void;
   loadSummaries: (conversationId: string) => void;
@@ -25,7 +26,7 @@ export const useScribeStore = create<ScribeState>((set, get) => ({
   currentConversationId: null,
   summariesByConversation: {},
   panelOpen: false,
-  isSummarizing: false,
+  summarizingCount: 0,
   hasShownOnce: false,
 
   setCurrentConversation: (id) => {
@@ -100,7 +101,13 @@ export const useScribeStore = create<ScribeState>((set, get) => ({
     get().persistSummaries(conversationId);
   },
 
-  setSummarizing: (v) => set({ isSummarizing: v }),
+  incrementSummarizing: () =>
+    set((state) => ({ summarizingCount: state.summarizingCount + 1 })),
+
+  decrementSummarizing: () =>
+    set((state) => ({
+      summarizingCount: Math.max(0, state.summarizingCount - 1),
+    })),
 
   openPanel: () => {
     useSettingsStore.setState({ sidebarOpen: false });
@@ -140,4 +147,8 @@ const EMPTY_SUMMARIES: ScribeSummary[] = [];
 export function selectCurrentSummaries(state: ScribeState): ScribeSummary[] {
   if (!state.currentConversationId) return EMPTY_SUMMARIES;
   return state.summariesByConversation[state.currentConversationId] ?? EMPTY_SUMMARIES;
+}
+
+export function selectIsSummarizing(state: ScribeState): boolean {
+  return state.summarizingCount > 0;
 }
