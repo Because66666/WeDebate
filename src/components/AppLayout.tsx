@@ -1,8 +1,10 @@
-import { Menu, Users, Settings, Sun, Moon, ClipboardList } from 'lucide-react';
+import { useState } from 'react';
+import { Menu, Users, Settings, Sun, Moon, ClipboardList, Share2 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { SettingsPanel } from './SettingsPanel';
 import { AgentPanel } from './AgentPanel';
 import { ScribePanel } from './ScribePanel';
+import { ShareModal } from './ShareModal';
 import ChatArea from './ChatArea';
 import InputBox from './InputBox';
 import { useSettingsStore } from '../stores/settings';
@@ -30,6 +32,8 @@ export function AppLayout() {
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
+
+  const [shareOpen, setShareOpen] = useState(false);
 
   return (
     <div
@@ -73,7 +77,7 @@ export function AppLayout() {
           {title}
         </h1>
 
-        {/* Right: theme toggle + agent panel + settings */}
+        {/* Right: share + theme toggle + agent panel + settings */}
         <div
           className="flex items-center gap-1.5 px-1.5 py-1"
           style={{
@@ -82,6 +86,20 @@ export function AppLayout() {
             backgroundColor: 'transparent',
           }}
         >
+          <button
+            onClick={() => setShareOpen(true)}
+            aria-label="分享会话"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center outline-none transition-all duration-200"
+            style={{
+              color: 'var(--icon-muted)',
+              borderRadius: 'var(--radius-sm)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            title="分享会话（导出 Markdown）"
+          >
+            <Share2 size={16} />
+          </button>
           <button
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
@@ -156,6 +174,7 @@ export function AppLayout() {
       {/* Overlay panels */}
       <SettingsPanel />
       <AgentPanel />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }

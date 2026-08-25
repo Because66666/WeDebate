@@ -2,6 +2,8 @@ import type { AgentConfig, ApiConfig, Message, ToolCallInfo, ChatUsage } from '.
 import { streamChatCompletion } from './openai';
 import { buildAgentContext } from './context-builder';
 import { createToolRegistry } from './tools';
+import { createAskUserTool } from './tools/ask-user';
+import { askUserService } from './ask-user';
 import { logService } from './log-service';
 
 export interface TurnManagerLike {
@@ -42,9 +44,14 @@ export class ChatService {
       usage?: ChatUsage,
     ) => void,
   ): Promise<string | null> {
-    // 1. If this is the first message (no existing agent messages), initTurn
+    // 1. 轮次初始化：
+    //    - 新对话（尚无 agent 消息）：从头开始流程；
+    //    - 上一轮流程已走完（getNextSpeaker 为 null，如整轮结束）：用户再次
+    //      发消息时重新从头走一遍流程；
+    //    - 用户终止后再发消息：turnState 仍指向被终止的 agent（getNextSpeaker
+    //      非 null），不重置——由被终止的 agent 继续回答
     const hasAgentMessages = existingMessages.some((m) => m.role === 'agent');
-    if (!hasAgentMessages) {
+    if (!hasAgentMessages || turnManager.getNextSpeaker() === null) {
       turnManager.initTurn(agents);
     }
 
@@ -55,8 +62,12 @@ export class ChatService {
     }
 
     // Create a new AbortController for this flow
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
+    // 持有本次流程的 controller 引用：结束时若已被新一轮 sendMessage 接管
+    // （ask_user 挂起被用户新消息取代并 abort 后立即开启新流程的场景），
+    // 旧循环不得复位 processing 状态、也不得清空新流程的 abortController
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
 
     // 3. Loop: getNextSpeaker -> if null, break (3 rounds done)
     let firstAgentContent: string | null = null;
@@ -88,6 +99,10 @@ export class ChatService {
 
       // Call onAgentMessageStart
       onAgentMessageStart(agent.id, messageId);
+
+      // 注册绑定当前消息的 ask_user 工具（所有智能体可用）：
+      // 工具执行时卡片会嵌入到上面这个 messageId 对应的消息中
+      this.toolRegistry.register(createAskUserTool(messageId));
 
       // Build tools configuration from registry
       const allTools = this.toolRegistry.getAll();
@@ -191,11 +206,20 @@ export class ChatService {
           encounteredError.name === 'AbortError' ||
           /aborted|body|stream|buffer/i.test(encounteredError.message);
 
-        const errorDisplay = isAbort
-          ? `**用户已终止输出**`
-          : `**${agent.name} 响应失败**\n\n${encounteredError.message}`;
-
-        onAgentMessageComplete(messageId, errorDisplay);
+        if (isAbort) {
+          // 保留被终止前已生成的部分内容并附加终止标记：
+          // 下一轮该 agent 继续回答时，上下文为
+          // [之前的对话记录, 被终止的部分回答, 用户消息]
+          // 仅去除尾部空白（保留首部），保证与流式正文的前缀对齐
+          const partial = fullContent.replace(/\s+$/, '');
+          const finalDisplay = partial
+            ? `${partial}\n\n**（输出被用户终止）**`
+            : '**用户已终止输出**';
+          onAgentMessageComplete(messageId, finalDisplay);
+          logService.setOutput(finalDisplay);
+        } else {
+          onAgentMessageComplete(messageId, `**${agent.name} 响应失败**\n\n${encounteredError.message}`);
+        }
         break;
       }
 
@@ -229,9 +253,11 @@ export class ChatService {
       turnManager.advance();
     }
 
-    // 4. setProcessing(false) when done
-    turnManager.setProcessing(false);
-    this.abortController = null;
+    // 4. setProcessing(false) when done（仅当未被新一轮流程接管时收尾）
+    if (this.abortController === controller) {
+      turnManager.setProcessing(false);
+      this.abortController = null;
+    }
 
     // 日志：将当前轮次的数据写入磁盘
     logService.flush();
@@ -245,6 +271,9 @@ export class ChatService {
       this.abortController.abort();
       this.abortController = null;
     }
+    // 中断会话时同步取消挂起中的 ask_user 询问，
+    // 避免工具调用永久挂起、卡片停留在 pending 状态
+    askUserService.cancelAll();
   }
 }
 

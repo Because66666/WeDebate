@@ -1,13 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { useConversationStore } from '../stores/conversation';
-import { useAgentStore } from '../stores/agent';
 import MessageItem from './MessageItem';
 import type { Message } from '../types';
 
 export default function ChatArea() {
   const conversation = useConversationStore((s) => s.getCurrentConversation());
-  const agents = useAgentStore((s) => s.agents);
   const messages = conversation?.messages ?? [];
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -73,19 +71,13 @@ export default function ChatArea() {
       aria-live="polite"
     >
       <div className="mx-auto max-w-3xl py-4 xl:max-w-5xl">
-        {messages.map((msg, i) => {
-          const agent = msg.agentId
-            ? agents.find((a) => a.id === msg.agentId)
-            : undefined;
-          return (
-            <MessageItem
-              key={msg.id}
-              message={msg}
-              agent={agent}
-              showSeparator={getShowSeparator(i, msg)}
-            />
-          );
-        })}
+        {messages.map((msg, i) => (
+          <MessageItem
+            key={msg.id}
+            message={msg}
+            showSeparator={getShowSeparator(i, msg)}
+          />
+        ))}
       </div>
     </div>
   );

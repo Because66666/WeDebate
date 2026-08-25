@@ -94,7 +94,7 @@ export async function streamChatCompletion(
   }
 
   // 读取流式响应
-  const { fullContent, toolCalls, rawDsmlBlocks, usage } = await readStream(
+  const { fullContent, toolCalls, rawDsmlBlocks, usage, error } = await readStream(
     response,
     callbacks,
   );
@@ -103,6 +103,10 @@ export async function streamChatCompletion(
 
   // 流末尾的 usage 在这里向上冒泡（递归每一轮的 usage 都会触发）
   if (usage) callbacks.onUsage?.(usage);
+
+  // 流读取出错（如用户终止）：onError 已上报，不再当作正常完成处理，
+  // 也不继续执行已解析出的工具调用
+  if (error) return;
 
   // 如果没有 tool_calls，直接返回累积的内容
   if (toolCalls.length === 0) {
@@ -193,6 +197,7 @@ interface ReadStreamResult {
   reasoningContent: string;
   rawDsmlBlocks: string[];
   usage?: ChatUsage;
+  error?: Error; // 流读取阶段发生错误（如用户终止）：已通过 onError 上报，调用方不得再走正常完成/工具执行路径
 }
 
 /**
@@ -456,8 +461,9 @@ async function readStream(
     return buildResult();
   } catch (err) {
     finalizeBuffers();
-    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
-    return buildResult();
+    const error = err instanceof Error ? err : new Error(String(err));
+    callbacks.onError(error);
+    return { ...buildResult(), error };
   }
 }
 

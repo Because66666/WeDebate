@@ -24,6 +24,13 @@ export type ThinkingBlockItem =
   | { type: 'text'; content: string }
   | { type: 'tool_call'; id: string };
 
+// 有序消息片段：思考块与正文按流式事件到达顺序交错。
+// 一个消息中可能出现「思考-正文-思考-正文」等多段交错，
+// 每段思考渲染为独立的思考块，保持输出时序
+export type MessageSegment =
+  | { type: 'thinking'; items: ThinkingBlockItem[] }
+  | { type: 'text'; text: string };
+
 // 聊天消息
 export interface Message {
   id: string;
@@ -36,6 +43,34 @@ export interface Message {
   reasoningComplete?: boolean; // 思考阶段是否已结束（用于控制正文显示顺序）
   toolCalls?: ToolCallInfo[]; // 该消息关联的工具调用
   thinkingBlocks?: ThinkingBlockItem[]; // 有序的思考片段（文本+工具调用交错）
+  segments?: MessageSegment[]; // 有序消息片段（多段思考与正文交错；undefined 为旧数据）
+  interactions?: InteractionCard[]; // 内嵌交互卡片（如 ask_user 询问用户）
+}
+
+// 询问用户：单个问题
+export interface AskUserQuestion {
+  id: string;
+  question: string;
+  type: 'single' | 'multiple' | 'free'; // 单选 / 多选 / 自由回答
+  options?: string[]; // 选择题候选选项（free 时无）
+}
+
+// 询问用户：用户对单个问题的作答
+export interface AskUserAnswer {
+  choice?: string | string[]; // 选择题选中项（多选为数组）；选中「其他」时配合 other_text
+  other_text?: string; // 选中「其他」时的自定义文本
+  text?: string; // 自由回答题文本
+}
+
+// 内嵌交互卡片（当前仅 ask_user；保留 kind 便于后续扩展审批/审查等卡片）
+export interface InteractionCard {
+  id: string;
+  kind: 'ask_user';
+  status: 'pending' | 'resolved';
+  questions?: AskUserQuestion[]; // ask_user 的问题列表
+  askAnswers?: Record<string, AskUserAnswer>; // 用户提交的答案（resolved 后回填）
+  disabled?: boolean; // 会话中断等导致卡片不可交互
+  supersededByMessage?: string; // 挂起期间被用户新指令取代时记录的消息 id
 }
 
 // 对话

@@ -3,6 +3,7 @@ import type { Conversation, Message, ApiConfig } from '../types';
 import { storageService } from '../services/storage';
 import { generateTitle } from '../services/scribe-service';
 import { useScribeStore } from './scribe';
+import { useTurnStore } from './turn';
 
 interface ConversationState {
   conversations: Conversation[];
@@ -73,10 +74,15 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     useScribeStore.getState().setCurrentConversation(get().currentConversationId);
   },
 
-  switchConversation: (id: string) => {
+  switchConversation: (id) => {
     set({ currentConversationId: id });
     storageService.setCurrentConversationId(id);
     useScribeStore.getState().setCurrentConversation(id);
+    // 轮次状态不跨对话：重置避免旧对话的残留轮次位置
+    // （如终止时指向某个 agent）污染新对话的发言调度；
+    // 若旧对话仍在生成，其循环会在当前 agent 完成后因 getNextSpeaker
+    // 为 null 自然停止
+    useTurnStore.getState().resetTurn();
   },
 
   addMessage: (message: Message) => {

@@ -6,9 +6,10 @@ import { useSettingsStore } from '../stores/settings';
 import { useTurnStore } from '../stores/turn';
 import { useScribeStore } from '../stores/scribe';
 import { chatService } from '../services/chat-service';
+import { askUserService } from '../services/ask-user';
 import { logService } from '../services/log-service';
 import { summarizeAgentSpeech } from '../services/scribe-service';
-import type { Message, ApiConfig, ToolCallInfo, ThinkingBlockItem } from '../types';
+import type { Message, MessageSegment, ApiConfig, ToolCallInfo, ThinkingBlockItem } from '../types';
 
 export default function InputBox() {
   const [input, setInput] = useState('');
@@ -23,8 +24,14 @@ export default function InputBox() {
     el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
   }, []);
 
-  // 流式 token 缓冲：使用 requestAnimationFrame 批量合并更新，降低渲染频率
-  const tokenBufferRef = useRef<{ messageId: string; content: string; reasoning: string } | null>(null);
+  // 流式 token 缓冲：使用 requestAnimationFrame 批量合并更新，降低渲染频率。
+  // 按事件到达顺序记录（而非按类型分桶累积），保证 interleaved 模型
+  // 「正文-思考-正文」交错到达时 segments 追加顺序与真实顺序一致
+  interface BufferedTokenEvent {
+    kind: 'reasoning' | 'content';
+    text: string;
+  }
+  const tokenBufferRef = useRef<{ messageId: string; events: BufferedTokenEvent[] } | null>(null);
   const rafRef = useRef<number | null>(null);
   // 记录哪些消息已收到过 reasoning token，用于无 reasoning 模型兜底判断
   const hasReasoningRef = useRef<Set<string>>(new Set());
@@ -43,6 +50,39 @@ export default function InputBox() {
     return [...blocks, { type: 'text', content: text }];
   }
 
+  /** 将流式文本按类型追加到 segments 末尾（同类型片段合并、异类型新建），
+   *  保持思考与正文的交错顺序：思考-正文-思考-正文 → 两个思考片段 + 两个正文片段 */
+  function appendToSegments(segments: MessageSegment[], kind: 'thinking' | 'text', text: string): MessageSegment[] {
+    if (!text) return segments;
+    const last = segments[segments.length - 1];
+    if (kind === 'thinking') {
+      if (last?.type === 'thinking') {
+        // 工具调用后的新一轮思考独立成块：
+        // 末尾片段以 tool_call 结束说明上一轮思考已随工具调用终结，
+        // 后续 reasoning 属于工具结果返回后的新一轮思考
+        const lastItem = last.items[last.items.length - 1];
+        if (lastItem?.type === 'tool_call') {
+          return [...segments, { type: 'thinking', items: [{ type: 'text', content: text }] }];
+        }
+        return [...segments.slice(0, -1), { type: 'thinking', items: appendReasoningToBlocks(last.items, text) }];
+      }
+      return [...segments, { type: 'thinking', items: [{ type: 'text', content: text }] }];
+    }
+    if (last?.type === 'text') {
+      return [...segments.slice(0, -1), { type: 'text', text: last.text + text }];
+    }
+    return [...segments, { type: 'text', text }];
+  }
+
+  /** 将工具调用标记追加到 segments 末尾的 thinking 片段（末尾非 thinking 时新建） */
+  function appendToolCallToSegments(segments: MessageSegment[], toolCallId: string): MessageSegment[] {
+    const last = segments[segments.length - 1];
+    if (last?.type === 'thinking') {
+      return [...segments.slice(0, -1), { type: 'thinking', items: [...last.items, { type: 'tool_call', id: toolCallId }] }];
+    }
+    return [...segments, { type: 'thinking', items: [{ type: 'tool_call', id: toolCallId }] }];
+  }
+
   const flushTokens = useCallback(() => {
     rafRef.current = null;
     const buffer = tokenBufferRef.current;
@@ -54,11 +94,36 @@ export default function InputBox() {
     const msg = conv.messages.find((m) => m.id === buffer.messageId);
     if (!msg) return;
 
-    const newContent = msg.content + buffer.content;
-    const newReasoning = (msg.reasoningContent || '') + buffer.reasoning;
-    // 增量更新 thinkingBlocks：将新的 reasoning text 追加到末尾 text block
-    const newBlocks = appendReasoningToBlocks(msg.thinkingBlocks || [], buffer.reasoning);
-    useConversationStore.getState().updateMessage(buffer.messageId, newContent, true, newReasoning, newBlocks);
+    // 先合并相邻同类型事件（保持顺序，减少片段数组操作次数）
+    const merged: BufferedTokenEvent[] = [];
+    for (const ev of buffer.events) {
+      const last = merged[merged.length - 1];
+      if (last && last.kind === ev.kind) last.text += ev.text;
+      else merged.push({ ...ev });
+    }
+
+    // 按真实到达顺序增量追加：content/reasoningContent/thinkingBlocks 汇总字段 + segments 有序片段
+    let newContent = msg.content;
+    let newReasoning = msg.reasoningContent || '';
+    let newBlocks = msg.thinkingBlocks || [];
+    let newSegments = msg.segments ?? [];
+    for (const ev of merged) {
+      if (ev.kind === 'content') {
+        newContent += ev.text;
+        newSegments = appendToSegments(newSegments, 'text', ev.text);
+      } else {
+        newReasoning += ev.text;
+        newBlocks = appendReasoningToBlocks(newBlocks, ev.text);
+        newSegments = appendToSegments(newSegments, 'thinking', ev.text);
+      }
+    }
+    useConversationStore.getState().patchMessage(buffer.messageId, {
+      content: newContent,
+      isStreaming: true,
+      reasoningContent: newReasoning,
+      thinkingBlocks: newBlocks,
+      segments: newSegments,
+    });
   }, []);
 
   const enqueueToken = useCallback(
@@ -68,11 +133,11 @@ export default function InputBox() {
         if (tokenBufferRef.current) {
           flushTokens();
         }
-        tokenBufferRef.current = { messageId, content: '', reasoning: '' };
+        tokenBufferRef.current = { messageId, events: [] };
       }
 
-      tokenBufferRef.current.content += contentToken;
-      tokenBufferRef.current.reasoning += reasoningToken;
+      if (contentToken) tokenBufferRef.current.events.push({ kind: 'content', text: contentToken });
+      if (reasoningToken) tokenBufferRef.current.events.push({ kind: 'reasoning', text: reasoningToken });
 
       if (!rafRef.current) {
         rafRef.current = requestAnimationFrame(flushTokens);
@@ -126,6 +191,14 @@ export default function InputBox() {
     // Add user message
     convStore.addMessage(userMessage);
 
+    // 挂起中的 ask_user 询问被这条新指令取代：
+    // 卡片标记 superseded，并中止旧流程（否则挂起解锁后旧调度循环
+    // 会与新一轮 sendMessage 并发跑，导致发言顺序错乱）
+    if (askUserService.hasPending()) {
+      askUserService.markSuperseded(userMessage.id);
+      chatService.abort();
+    }
+
     // 日志：开始新一轮对话记录
     logService.startRound(text);
 
@@ -160,6 +233,7 @@ export default function InputBox() {
           timestamp: Date.now(),
           isStreaming: true,
           reasoningComplete: false,
+          segments: [], // 从一开始就走有序片段渲染管线
         };
         convStore.addMessage(agentMessage);
       },
@@ -180,8 +254,37 @@ export default function InputBox() {
       (messageId, fullContent) => {
         // 先 flush 可能残留的 token 缓冲
         flushTokens();
+        // segments 对齐：finalContent 可能含流式正文之外的追加内容
+        // （如终止标记「**（输出被用户终止）**」）或覆盖型文案（如错误消息），
+        // 将差值同步到 segments 的正文片段，保证回放一致
+        const store = useConversationStore.getState();
+        const msg = store.getCurrentConversation()?.messages.find((m) => m.id === messageId);
+        if (msg?.segments) {
+          // 比较基准：segments 正文总和（容忍尾部空白差异——
+          // chat-service 终止拼接会去除流式正文尾部空白，属正常的尾部追加型）
+          const streamed = msg.segments
+            .map((s) => (s.type === 'text' ? s.text : ''))
+            .join('')
+            .replace(/\s+$/, '');
+          let newSegments: MessageSegment[] | null = null;
+          if (fullContent.startsWith(streamed) && fullContent.length > streamed.length) {
+            // 尾部追加型（终止标记）：差值补到最后一个片段
+            const diff = fullContent.slice(streamed.length);
+            const last = msg.segments[msg.segments.length - 1];
+            newSegments = last?.type === 'text'
+              ? [...msg.segments.slice(0, -1), { type: 'text', text: last.text + diff }]
+              : [...msg.segments, { type: 'text', text: diff }];
+          } else if (!fullContent.startsWith(streamed)) {
+            // 覆盖型（错误消息）：保留思考片段，正文收敛为单一片段
+            newSegments = [
+              ...msg.segments.filter((s) => s.type === 'thinking'),
+              { type: 'text', text: fullContent },
+            ];
+          }
+          if (newSegments) store.patchMessage(messageId, { segments: newSegments });
+        }
         // 消息完成时强制标记 reasoningComplete，确保错误/无 reasoning/工具调用后正文可见
-        useConversationStore.getState().patchMessage(messageId, { reasoningComplete: true });
+        store.patchMessage(messageId, { reasoningComplete: true });
         convStore.updateMessage(messageId, fullContent, false);
 
         // 清理该消息的 reasoning 跟踪状态
@@ -206,7 +309,7 @@ export default function InputBox() {
       },
       // onAgentToolCallStart
       (messageId, toolCall: ToolCallInfo) => {
-        // 先 flush 缓冲区中的 reasoning token，避免工具调用和 reasoning 文本时序倒转
+        // 先 flush 缓冲区中的 token，避免工具调用和 reasoning 文本时序倒转
         flushTokens();
         const conv = useConversationStore.getState().getCurrentConversation();
         const msg = conv?.messages.find((m) => m.id === messageId);
@@ -214,9 +317,12 @@ export default function InputBox() {
         // 在 thinkingBlocks 末尾追加 tool_call 块
         const currentBlocks = msg.thinkingBlocks || [];
         const newBlocks: ThinkingBlockItem[] = [...currentBlocks, { type: 'tool_call', id: toolCall.id }];
+        // segments：工具调用标记追加到末尾 thinking 片段（工具调用属于思考过程）
+        const newSegments = appendToolCallToSegments(msg.segments ?? [], toolCall.id);
         useConversationStore.getState().patchMessage(messageId, {
           toolCalls: [...(msg.toolCalls || []), toolCall],
           thinkingBlocks: newBlocks,
+          segments: newSegments,
         });
       },
       // onAgentToolCallResult

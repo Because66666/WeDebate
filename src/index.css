@@ -68,6 +68,8 @@
   --sidebar-foreground: var(--txt-800);
   --sidebar-hover: var(--bg-200);
   --sidebar-active: var(--brand-50);
+  --user-bubble-bg: var(--brand-500);
+  --user-bubble-fg: #ffffff;
 
   /* Typography */
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
@@ -130,6 +132,8 @@
   --sidebar-foreground: var(--txt-50);
   --sidebar-hover: var(--bg-700);
   --sidebar-active: var(--brand-900);
+  --user-bubble-bg: var(--brand-400);
+  --user-bubble-fg: #ffffff;
 
   --shadow-xs: 0 0 1px rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -203,6 +207,51 @@
 .apple-blur-bg {
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* ===== Message entrance animation ===== */
+@keyframes aml-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.aml-fade-in-up {
+  animation: aml-fade-in-up 0.24s ease-out both;
+}
+
+/* ===== Thinking block toggle hover（bar 底色由内联样式提供，hover 时加深） ===== */
+.aml-thinking-toggle:hover {
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent) !important;
+}
+
+/* ===== 正在思考：微光闪烁效果 ===== */
+@keyframes aml-shimmer-slide {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.aml-thinking-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    color-mix(in srgb, var(--primary) 30%, transparent) 50%,
+    var(--primary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: aml-shimmer-slide 1.6s linear infinite;
 }
 
 .apple-blur-light {

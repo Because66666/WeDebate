@@ -8,7 +8,7 @@ import express from 'express';
 import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { searchBing, fetchWebPage } from './search.js';
+import { searchWeb, fetchWebPage } from './search.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -43,7 +43,7 @@ app.get('/api/search', async (req, res) => {
   }
 
   try {
-    const results = await searchBing(query);
+    const results = await searchWeb(query);
     console.log(`[工具调用] web_search | 参数: query="${query}" | 返回 ${results.length} 条结果`);
     res.json({ query, results });
   } catch (error) {
